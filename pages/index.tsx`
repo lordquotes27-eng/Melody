@@ -1,0 +1,207 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import Player from '../components/Player';
+import { VELUNE_SEED_SONGS } from '../data/velune-seeds';
+
+async function fetchSpotifyData(token: string) {
+  try {
+    const res = await fetch('https://api.spotify.com/v1/browse/new-releases', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    return data.albums.items.map((album: any) => ({
+      _id: album.id,
+      title: album.name,
+      artist: album.artists[0].name,
+      cover: album.images[0].url,
+      preview_url: album.preview_url,
+      genre: 'Pop' // Default genre for Spotify releases
+    }));
+  } catch (e) {
+    console.error("Spotify API Error", e);
+    return [];
+  }
+}
+
+export default function Home() {
+  const [token, setToken] = useState<string | null>(null);
+  const [songs, setSongs] = useState([]);
+  const [currentSong, setCurrentSong] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    const storedToken = localStorage.getItem('spotify_token');
+    const activeToken = tokenFromUrl || storedToken;
+
+    if (activeToken) {
+      setToken(activeToken);
+      localStorage.setItem('spotify_token', activeToken);
+    }
+
+    async function loadAllMusic() {
+      setLoading(true);
+      try {
+        let spotifySongs = [];
+        if (activeToken) {
+          spotifySongs = await fetchSpotifyData(activeToken);
+        }
+
+        // MERGE: Combine Curated Velune Seeds + Real Spotify Data
+        const finalLibrary = [...VELUNE_SEED_SONGS, ...spotifySongs];
+
+        setSongs(finalLibrary);
+        if (finalLibrary.length > 0) setCurrentSong(finalLibrary[0]);
+      } catch (e) {
+        console.error("Error loading library", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadAllMusic();
+  }, []);
+
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-tr from-green-900/20 to-black z-0" />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center z-10"
+        >
+          <h1 className="text-6xl font-extrabold mb-6 tracking-tighter">Velune <span className="text-green-500">Clone</span></h1>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => window.location.href = 'http://localhost:5000/api/users/spotify/login'}
+            className="bg-green-500 text-black font-bold px-10 py-4 rounded-full text-lg shadow-[0_0_20px_rgba(31,185,84,0.4)]"
+          >
+            Connect Spotify
+          </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const filteredSongs = songs.filter((song: any) =>
+    song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0b] text-white flex relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-green-900/10 via-transparent to-blue-900/10" />
+
+      <motion.div
+        initial={{ x: -100, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="w-72 glass m-4 rounded-3xl p-6 flex flex-col gap-8 z-10 relative"
+      >
+        <div className="text-2xl font-black tracking-tighter flex items-center gap-2">
+          <div className="w-8 h-8 bg-green-500 rounded-lg rotate-12" /> Velune
+        </div>
+        <nav className="flex flex-col gap-2">
+          {['Home', 'Explore', 'Library', 'Liked Songs'].map((item, i) => (
+            <motion.div
+              key={item}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="p-3 rounded-xl cursor-pointer hover:bg-white/10 transition-all text-zinc-400 hover:text-white font-medium"
+            >
+              {item}
+            </motion.div>
+          ))}
+        </nav>
+        <div className="mt-auto p-4 bg-white/5 rounded-2xl flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-zinc-700" />
+          <div className="flex-1 overflow-hidden">
+            <div className="text-sm font-bold truncate">Spotify User</div>
+            <div className="text-xs text-zinc-500">Premium Member</div>
+          </div>
+          <button onClick={() => { localStorage.clear(); setToken(null); }} className="text-zinc-500 hover:text-red-400">✕</button>
+        </div>
+      </motion.div>
+
+      <div className="flex-1 p-8 z-10 relative overflow-y-auto">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-between items-center mb-10"
+        >
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search for music..."
+              className="bg-white/5 p-3 pl-12 rounded-2xl border border-white/10 outline-none focus:border-green-500/50 w-80 transition-all glass"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <span className="absolute left-4 top-3.5 text-zinc-500">🔍</span>
+          </div>
+        </motion.div>
+
+        <motion.h2
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-4xl font-bold mb-8 tracking-tight"
+        >
+          Discover <span className="text-green-500">Everything</span>
+        </motion.h2>
+
+        <motion.div
+          layout
+          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6"
+        >
+          <AnimatePresence>
+            {filteredSongs.map((song: any, i) => (
+              <motion.div
+                key={song._id}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ delay: i * 0.05 }}
+                whileHover={{ y: -10 }}
+                onClick={() => { setCurrentSong(song); setIsPlaying(true); }}
+                className="song-card glass p-4 rounded-2xl cursor-pointer group relative"
+              >
+                <div className="relative overflow-hidden rounded-xl mb-4">
+                  <motion.img
+                    whileHover={{ scale: 1.1 }}
+                    src={song.cover}
+                    className="w-full aspect-square object-cover transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="bg-green-500 text-black w-12 h-12 rounded-full flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-transform">▶️</div>
+                  </div>
+                </div>
+                <div className="font-bold truncate">{song.title}</div>
+                <div className="text-sm text-zinc-500 truncate">{song.artist}</div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      </div>
+
+      <AnimatePresence>
+        {currentSong && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-5xl z-50"
+          >
+            <Player currentSong={currentSong} isPlaying={isPlaying} setIsPlaying={setIsPlaying} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
